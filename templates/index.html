@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>阿里云 Workbench - AI 智能终端</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- 顶部导航栏 -->
+    <header class="top-bar">
+        <div class="top-bar-left">
+            <span class="logo">☁️ 阿里云 ECS Workbench</span>
+            <span class="separator">|</span>
+            <span class="instance-info">
+                <span class="status-dot online"></span>
+                <span id="instanceName">ecs-workbench</span> · 
+                <span id="currentUser">root</span> · 
+                <span id="currentCwd">/root</span>
+            </span>
+        </div>
+        <div class="top-bar-right">
+            <button class="btn-icon-top" onclick="openSettings()" title="API设置">⚙️</button>
+            <button id="aiToggle" class="ai-toggle active" onclick="toggleAiMode()">
+                <span class="ai-icon">🤖</span>
+                <span id="aiToggleText">AI Agent</span>
+                <span class="toggle-badge">ON</span>
+            </button>
+            <span class="shortcut-hint">Ctrl+Shift+I</span>
+        </div>
+    </header>
+
+    <!-- 主体区域 -->
+    <main class="main-container">
+        <!-- 左侧：命令预览区 -->
+        <section class="panel panel-preview" id="previewPanel">
+            <div class="panel-header">
+                <span class="panel-title">📋 命令预览</span>
+                <span class="panel-subtitle">AI 生成的命令将在此显示</span>
+            </div>
+            <div class="panel-body" id="previewBody">
+                <div class="empty-state" id="emptyPreview">
+                    <div class="empty-icon">💬</div>
+                    <div class="empty-text">在下方输入自然语言指令</div>
+                    <div class="empty-hint">例如："查看磁盘空间"、"查看内存使用"、"查看IP地址"</div>
+                    <div class="quick-suggestions" id="quickSuggestions"></div>
+                </div>
+                <div class="command-result" id="commandPreview" style="display:none;"></div>
+            </div>
+        </section>
+
+        <!-- 拖拽分隔条 -->
+        <div class="resizer" id="resizer"></div>
+
+        <!-- 右侧：执行结果区 -->
+        <section class="panel panel-result" id="resultPanel">
+            <div class="panel-header">
+                <span class="panel-title">⚡ 执行结果</span>
+                <div class="panel-actions">
+                    <button class="btn-icon" onclick="clearResult()" title="清空结果">🗑️</button>
+                </div>
+            </div>
+            <div class="panel-body result-body" id="resultBody">
+                <div class="terminal-welcome">
+                    <pre class="welcome-art">
+ ╔══════════════════════════════════════════════════════════╗
+ ║                                                          ║
+ ║   🤖  阿里云 Workbench AI 智能终端  v1.0                ║
+ ║                                                          ║
+ ║   基于大模型的智能运维交互终端                           ║
+ ║   支持自然语言指令 → Shell 命令转换                      ║
+ ║                                                          ║
+ ║   📌 输入自然语言描述，AI 自动生成可执行命令             ║
+ ║   🔒 高危命令自动拦截，安全可控                          ║
+ ║   📊 支持系统监控、故障排查、服务管理等运维场景          ║
+ ║                                                          ║
+ ╚══════════════════════════════════════════════════════════╝
+                    </pre>
+                </div>
+                <div id="executionResults"></div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 底部输入区 -->
+    <footer class="input-bar">
+        <div class="input-container">
+            <span class="prompt" id="promptPrefix">Agent &gt;</span>
+            <input 
+                type="text" 
+                id="userInput" 
+                class="input-field"
+                placeholder="请输入自然语言指令或Shell命令（如：查看磁盘空间）"
+                autocomplete="off"
+                autofocus
+            >
+            <button class="btn-send" id="sendBtn" onclick="handleSend()">
+                <span>执行</span>
+                <span class="send-icon">⏎</span>
+            </button>
+        </div>
+        <div class="input-hints">
+            <span class="hint-item">💡 支持中文/英文自然语言</span>
+            <span class="hint-sep">·</span>
+            <span class="hint-item">🔒 高危命令自动拦截</span>
+            <span class="hint-sep">·</span>
+            <span class="hint-item">⌨️ Enter 发送</span>
+        </div>
+    </footer>
+
+    <!-- API 设置弹窗 -->
+    <div class="modal-overlay" id="settingsModal" style="display:none;">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-icon">⚙️</span>
+                <span class="modal-title">AI API 设置</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">API Key</label>
+                    <input type="password" id="apiKeyInput" class="form-input" placeholder="sk-xxxxxxxxxxxxxxxx">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Base URL（可选，兼容 OpenAI 接口的服务商）</label>
+                    <input type="text" id="baseUrlInput" class="form-input" placeholder="https://api.openai.com/v1">
+                    <div class="form-hint">通义千问: https://dashscope.aliyuncs.com/compatible-mode/v1</div>
+                    <div class="form-hint">DeepSeek: https://api.deepseek.com</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">模型名称</label>
+                    <input type="text" id="modelInput" class="form-input" placeholder="gpt-3.5-turbo">
+                    <div class="form-hint">通义千问: qwen-turbo / qwen-plus / qwen-max</div>
+                    <div class="form-hint">DeepSeek: deepseek-chat / deepseek-reasoner</div>
+                </div>
+                <div class="form-status" id="configStatus"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeSettings()">取消</button>
+                <button class="btn-save" onclick="saveSettings()">保存配置</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 高危确认弹窗 -->
+    <div class="modal-overlay" id="dangerModal" style="display:none;">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-icon">⚠️</span>
+                <span class="modal-title">高危命令确认</span>
+            </div>
+            <div class="modal-body">
+                <p>以下命令可能对系统造成<strong>不可逆损害</strong>，请确认是否执行：</p>
+                <pre class="modal-command" id="dangerCommand"></pre>
+                <p class="modal-warning">此操作将直接作用于服务器，请确保您了解命令的后果。</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="cancelDanger()">取消</button>
+                <button class="btn-danger" onclick="confirmDanger()">确认执行</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/terminal.js"></script>
+</body>
+</html>
